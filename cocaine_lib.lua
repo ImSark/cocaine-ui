@@ -4512,22 +4512,31 @@ function Lib.CreateWindow(opts: any?): any
   root.Draggable = true
   root.Parent = gui
   Instance.new("UICorner", root).CornerRadius = UDim.new(0, 12)
-  -- layered outline like the original: bright edge + drop shadow + acrylic top-light + grain.
-  -- NOTE: softShadow needs getcustomasset PNGs (nil on file-less executors), so a
-  -- second thick dark stroke fakes the outer drop edge — renders everywhere.
-  local stroke = Instance.new("UIStroke", root)
-  stroke.Color = C.edge
-  stroke.Thickness = 1
-  stroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
-  local outer = Instance.new("UIStroke", root)
-  outer.Name = "OuterOutline"
-  outer.Color = Color3.new(0, 0, 0)
-  outer.Transparency = 0.5
-  outer.Thickness = 4
-  outer.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
+  -- exact original outline: edge gradient stroke + 22px black shadow + 20px accent aura
+  local edge = Instance.new("UIStroke", root)
+  edge.Name = "Edge"
+  edge.Color = Color3.new(1, 1, 1)
+  edge.Thickness = 1
+  edge.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
+  local eg = Instance.new("UIGradient", edge)
+  eg.Rotation = 35
+  local lookFx = UI.themeFx()
+  eg.Color = if lookFx
+    then UI.fxSeq(lookFx.flag)
+    else ColorSequence.new({
+      ColorSequenceKeypoint.new(0, C.accent),
+      ColorSequenceKeypoint.new(0.35, C.edge),
+      ColorSequenceKeypoint.new(0.7, C.edge),
+      ColorSequenceKeypoint.new(1, C.accent2),
+    })
+  -- metal edge takes over the gradient rotation if no theme fx
+  if not lookFx and UI.metalEdge(edge) then
+    UI.metalEdge(edge).Rotation = 35
+  end
+  -- 22px: the original's docked panel sits 14px away; falloff nearly gone by then
   pcall(function()
-    UI.softShadow(root, "AuraShadow", Color3.new(0, 0, 0), 0.35, 24, 12)
-    UI.acrylic(root, { light = 0.08, grain = 0.96, radius = 12, edge = 0.85, z = 0 })
+    UI.softShadow(root, "Shadow", Color3.new(0, 0, 0), 0.45, 22, 12)
+    UI.softShadow(root, "Aura", C.accent, UI.glowAlpha(0.4), 20, 12)
   end)
   -- titlebar
   local bar = Instance.new("Frame", root)

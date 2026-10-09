@@ -4492,11 +4492,18 @@ function Lib.CreateWindow(opts: any?): any
     gui.Parent = cg
   end)
   if not parented or gui.Parent == nil then
-    pcall(function()
-      local getHui = __gg("gethui")
-      if type(getHui) == "function" then gui.Parent = getHui() return end
-      gui.Parent = game.Players.LocalPlayer:WaitForChild("PlayerGui")
-    end)
+    local pg
+    pcall(function() pg = game.Players:FindFirstChild("LocalPlayer") end)
+    if pg then
+      local ok, playerGui = pcall(function() return pg:FindFirstChild("PlayerGui") end)
+      if ok and playerGui then
+        gui.Parent = playerGui
+      else
+        gui.Parent = game:GetService("CoreGui")
+      end
+    else
+      pcall(function() gui.Parent = game:GetService("CoreGui") end)
+    end
   end
   local W, H = 620, 440
   if typeof(opts.Size) == "UDim2" then

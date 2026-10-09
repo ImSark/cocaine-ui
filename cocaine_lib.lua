@@ -4512,9 +4512,15 @@ function Lib.CreateWindow(opts: any?): any
   root.Draggable = true
   root.Parent = gui
   Instance.new("UICorner", root).CornerRadius = UDim.new(0, 12)
+  -- layered outline like the original: bright edge + drop shadow + acrylic top-light + grain
   local stroke = Instance.new("UIStroke", root)
-  stroke.Color = C.hairline
+  stroke.Color = C.edge
   stroke.Thickness = 1
+  stroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
+  pcall(function()
+    UI.softShadow(root, "Shadow", Color3.new(0, 0, 0), 0.35, 24, 12)
+    UI.acrylic(root, { light = 0.08, grain = 0.96, radius = 12, edge = 0.85, z = 0 })
+  end)
   -- titlebar
   local bar = Instance.new("Frame", root)
   bar.Name = "Titlebar"

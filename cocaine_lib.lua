@@ -40,6 +40,10 @@ end
 local function saveConfig() end
 local function saveConfigSoon() end
 local Input = {}
+Input.bindLabels = {}
+Input.capturing = false
+function Input.bindTouched() end
+function Input.captureKey() end
 function Input.keyLabel(k)
   if type(k) ~= "string" or k == "" then return "" end
   return tostring(k):gsub("MouseButton", "M"):gsub("Left", "L"):gsub("Right", "R")

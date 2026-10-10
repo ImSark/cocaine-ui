@@ -44,6 +44,11 @@ Input.bindLabels = {}
 Input.capturing = false
 function Input.bindTouched() end
 function Input.captureKey() end
+-- visuals shim (§9 owns this in c0cain): colour cells read cfg through it
+local Vis: any = {}
+function Vis.col(key: string): Color3
+  return rgb(cfg[key], rgb(cfg.colAccent, Color3.new(1, 1, 1)))
+end
 function Input.keyLabel(k)
   if type(k) ~= "string" or k == "" then return "" end
   return tostring(k):gsub("MouseButton", "M"):gsub("Left", "L"):gsub("Right", "R")
@@ -4471,7 +4476,7 @@ end
 
 -- Window / Tab manager (standalone only, not part of the verbatim kit)
 local Lib: any = {}
-Lib.VERSION = "1.0.4-profilefix"
+Lib.VERSION = "1.0.5-viscol"
 print("[cocaine-lib] " .. tostring(Lib.VERSION))
 Lib.UI = UI
 Lib.cfg = cfg

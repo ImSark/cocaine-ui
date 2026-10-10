@@ -4510,7 +4510,7 @@ end
 
 -- Window / Tab manager (standalone only, not part of the verbatim kit)
 local Lib: any = {}
-Lib.VERSION = "2.0.14-keys"
+Lib.VERSION = "2.0.15-iconspace"
 print("[cocaine-lib] " .. tostring(Lib.VERSION))
 Lib.UI = UI
 Lib.cfg = cfg
@@ -4530,6 +4530,8 @@ function Lib.CreateWindow(opts: any?): any
     if typeof(a) == "Color3" then C.accent = a end
   end
   UI.applyTheme()
+  -- fonts/icons in the background (rail glyphs use the fallback until these land)
+  pcall(function() UI.loadAssets() end)
   -- sweep stale copies: every execute is a fresh Lib whose _windows starts empty,
   -- so destroy prior windows by name (CoreGui, PlayerGui, hidden UI alike)
   pcall(function()
@@ -4883,11 +4885,12 @@ function Lib.CreateWindow(opts: any?): any
     btn.LayoutOrder = #self.tabs * 100 + 1
     Instance.new("UICorner", btn).CornerRadius = UDim.new(0, 6)
     local padB = Instance.new("UIPadding", btn)
-    padB.PaddingLeft = UDim.new(0, 28)
+    padB.PaddingLeft = UDim.new(0, 34)
+    padB.PaddingRight = UDim.new(0, 6)
     -- rail glyph from the kit's icon set (frame-drawn fallback, no assets needed)
-    local tic = UI.icon(btn, railIcon(tostring(name)), 15)
+    local tic = UI.icon(btn, railIcon(tostring(name)), 16)
     tic.AnchorPoint = Vector2.new(0, 0.5)
-    tic.Position = UDim2.new(0, 8, 0.5, 0)
+    tic.Position = UDim2.new(0, 10, 0.5, 0)
     Instance.new("UICorner", btn).CornerRadius = UDim.new(0, 6)
     local tab: any = { name = name, page = page, button = btn, subbar = subbar, subs = {}, activeSub = nil, _colFlip = false }
     function tab:Sub(sname: string): any

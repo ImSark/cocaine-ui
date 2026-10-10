@@ -41,9 +41,41 @@ local function saveConfig() end
 local function saveConfigSoon() end
 local Input = {}
 Input.bindLabels = {}
-Input.capturing = false
+local _capturing = false
+function Input.capturing() return _capturing end
 function Input.bindTouched() end
-function Input.captureKey() end
+-- click the key button → next key/mouse press is captured (Escape/Backspace clears)
+function Input.captureKey(cb)
+  if _capturing then return end
+  _capturing = true
+  local uis = game:GetService("UserInputService")
+  local conn: RBXScriptConnection? = nil
+  conn = uis.InputBegan:Connect(function(input: InputObject, _gpe: boolean)
+    if not _capturing then return end
+    local kc = input.KeyCode
+    local name: string? = nil
+    if kc and kc ~= Enum.KeyCode.Unknown then
+      if kc == Enum.KeyCode.Escape or kc == Enum.KeyCode.Backspace then
+        _capturing = false
+        if conn then conn:Disconnect() end
+        cb("") -- clear the bind (handler stores ""), not cancel
+        return
+      end
+      name = kc.Name
+    elseif input.UserInputType == Enum.UserInputType.MouseButton1 then
+      name = "MouseButton1"
+    elseif input.UserInputType == Enum.UserInputType.MouseButton2 then
+      name = "MouseButton2"
+    elseif input.UserInputType == Enum.UserInputType.MouseButton3 then
+      name = "MouseButton3"
+    else
+      return
+    end
+    _capturing = false
+    if conn then conn:Disconnect() end
+    cb(name)
+  end)
+end
 -- visuals shim (§9 owns this in c0cain): colour cells read cfg through it
 local Vis: any = {}
 function Vis.col(key: string): Color3
@@ -3061,9 +3093,11 @@ local HttpService = game:GetService("HttpService")
 				t:GetPropertyChangedSignal("TextBounds"):Connect(placeMark)
 				UI.tip(mk, "Max only")
 			end
-			local hl = frame(head, C.hairline)
-			hl.Size = UDim2.new(1, 20, 0, 1)
-			hl.Position = UDim2.new(0, -10, 1, -1)
+			if not opts.noLine then
+				local hl = frame(head, C.hairline)
+				hl.Size = UDim2.new(1, 20, 0, 1)
+				hl.Position = UDim2.new(0, -10, 1, -1)
+			end
 			local gap = frame(card)
 			gap.Size = UDim2.new(1, 0, 0, 4)
 			gap.LayoutOrder = nextOrder()
@@ -4476,13 +4510,19 @@ end
 
 -- Window / Tab manager (standalone only, not part of the verbatim kit)
 local Lib: any = {}
-Lib.VERSION = "1.0.5-viscol"
+Lib.VERSION = "2.0.10-flattabs"
 print("[cocaine-lib] " .. tostring(Lib.VERSION))
 Lib.UI = UI
 Lib.cfg = cfg
 Lib._windows = {}
 function Lib.CreateWindow(opts: any?): any
   opts = opts or {}
+  -- single instance by default: a fresh execute replaces the old window (tabs stay
+  -- wired to the one gui instead of stacking dead copies under it). opts.Multi = true
+  -- keeps old windows around.
+  if opts.Multi ~= true then
+    Lib.UnloadAll()
+  end
   local title = tostring(opts.Title or opts.title or "Cocaine")
   local C = UI.C
   if opts.Accent then
@@ -4490,6 +4530,22 @@ function Lib.CreateWindow(opts: any?): any
     if typeof(a) == "Color3" then C.accent = a end
   end
   UI.applyTheme()
+  -- sweep stale copies: every execute is a fresh Lib whose _windows starts empty,
+  -- so destroy prior windows by name (CoreGui, PlayerGui, hidden UI alike)
+  pcall(function()
+    local names = { [opts.GuiName or "CocaineLib"] = true, CocaineLib = true }
+    local function sweep(parent)
+      if not parent then return end
+      for _, ch in ipairs(parent:GetChildren()) do
+        if names[ch.Name] then pcall(ch.Destroy, ch) end
+      end
+    end
+    sweep(game:GetService("CoreGui"))
+    local lp = game:GetService("Players").LocalPlayer
+    if lp then sweep(lp:FindFirstChild("PlayerGui")) end
+    local getHui = __gg("gethui")
+    if type(getHui) == "function" then sweep(getHui()) end
+  end)
   local gui = Instance.new("ScreenGui")
   gui.Name = opts.GuiName or "CocaineLib"
   gui.ResetOnSpawn = false
@@ -4505,7 +4561,7 @@ function Lib.CreateWindow(opts: any?): any
       gui.Parent = game.Players.LocalPlayer:WaitForChild("PlayerGui")
     end)
   end
-  local W, H = 620, 440
+  local W, H = 900, 560
   if typeof(opts.Size) == "UDim2" then
     W, H = opts.Size.X.Offset, opts.Size.Y.Offset
   end
@@ -4518,48 +4574,73 @@ function Lib.CreateWindow(opts: any?): any
   root.Active = true
   root.Draggable = true
   root.Parent = gui
+  -- popup host for dropdowns / colour pickers / bind popups (Menu.build sets this in c0cain)
+  UI.root = root
+  UI.popupHost = gui
   Instance.new("UICorner", root).CornerRadius = UDim.new(0, 12)
+  -- layered outline: bright edge + dark outer edge + acrylic top-light + grain
   local stroke = Instance.new("UIStroke", root)
-  stroke.Color = C.hairline
+  stroke.Color = C.edge
   stroke.Thickness = 1
-  -- titlebar
-  local bar = Instance.new("Frame", root)
-  bar.Name = "Titlebar"
-  bar.Size = UDim2.new(1, 0, 0, 44)
-  bar.BackgroundTransparency = 1
-  local logo = UI.logoMark(bar, 24, 0)
-  logo.Position = UDim2.fromOffset(14, 10)
-  local tt = Instance.new("TextLabel", bar)
-  tt.Size = UDim2.new(1, -120, 1, 0)
-  tt.Position = UDim2.fromOffset(46, 0)
+  stroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
+  local outer = Instance.new("UIStroke", root)
+  outer.Name = "OuterOutline"
+  outer.Color = Color3.new(0, 0, 0)
+  outer.Transparency = 0.5
+  outer.Thickness = 4
+  outer.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
+  pcall(function()
+    UI.softShadow(root, "AuraShadow", Color3.new(0, 0, 0), 0.35, 24, 12)
+    UI.acrylic(root, { light = 0.08, grain = 0.96, radius = 12, edge = 0.85, z = 0 })
+  end)
+  -- left rail (sections + tabs + profile foot) --------------------------------
+  local RAIL_W = 168
+  local side = Instance.new("Frame", root)
+  side.Name = "Sidebar"
+  side.Position = UDim2.new(0, 12, 0, 8)
+  side.Size = UDim2.new(0, RAIL_W, 1, -16)
+  side.BackgroundColor3 = C.side
+  side.BorderSizePixel = 0
+  Instance.new("UICorner", side).CornerRadius = UDim.new(0, 8)
+  local sStroke = Instance.new("UIStroke", side)
+  sStroke.Color = C.hairline
+  -- rail header: logo + title
+  local head = Instance.new("Frame", side)
+  head.Name = "Head"
+  head.Size = UDim2.new(1, 0, 0, 44)
+  head.BackgroundTransparency = 1
+  local logo = UI.logoMark(head, 22, 0)
+  logo.Position = UDim2.fromOffset(10, 11)
+  local tt = Instance.new("TextLabel", head)
+  tt.Size = UDim2.new(1, -44, 1, 0)
+  tt.Position = UDim2.fromOffset(38, 0)
   tt.BackgroundTransparency = 1
   tt.FontFace = UI.BRAND_FONT
   tt.TextSize = 15
   tt.TextXAlignment = Enum.TextXAlignment.Left
   tt.TextColor3 = C.text
   tt.Text = string.lower(title)
-  -- sidebar + pages
-  local side = Instance.new("Frame", root)
-  side.Name = "Sidebar"
-  side.Position = UDim2.new(0, 12, 0, 52)
-  side.Size = UDim2.new(0, 140, 1, -64)
-  side.BackgroundColor3 = C.side
-  side.BorderSizePixel = 0
-  Instance.new("UICorner", side).CornerRadius = UDim.new(0, 8)
-  local sideList = Instance.new("UIListLayout", side)
-  sideList.Padding = UDim.new(0, 4)
+  local sideScroll = Instance.new("ScrollingFrame", side)
+  sideScroll.Name = "Tabs"
+  sideScroll.Position = UDim2.new(0, 0, 0, 48)
+  sideScroll.Size = UDim2.new(1, 0, 1, -104)
+  sideScroll.BackgroundTransparency = 1
+  sideScroll.BorderSizePixel = 0
+  sideScroll.ScrollBarThickness = 0
+  sideScroll.AutomaticCanvasSize = Enum.AutomaticSize.Y
+  sideScroll.CanvasSize = UDim2.new(0, 0, 0, 0)
+  local sideList = Instance.new("UIListLayout", sideScroll)
+  sideList.Padding = UDim.new(0, 2)
   sideList.SortOrder = Enum.SortOrder.LayoutOrder
-  local pad = Instance.new("UIPadding", side)
-  pad.PaddingTop = UDim.new(0, 8)
-  pad.PaddingLeft = UDim.new(0, 8)
-  pad.PaddingRight = UDim.new(0, 8)
-  pad.PaddingBottom = UDim.new(0, 56)
-  -- profile card pinned to the sidebar foot, like the original (avatar + name + executor).
-  -- NOTE: parented to root, not side — side's UIListLayout would override its anchors.
-  local foot = Instance.new("Frame", root)
+  local sidePad = Instance.new("UIPadding", sideScroll)
+  sidePad.PaddingLeft = UDim.new(0, 8)
+  sidePad.PaddingRight = UDim.new(0, 8)
+  -- profile card pinned to the rail foot (avatar + name + executor)
+  local foot = Instance.new("Frame", side)
   foot.Name = "Profile"
-  foot.Position = UDim2.new(0, 20, 1, -52)
-  foot.Size = UDim2.new(0, 124, 0, 44)
+  foot.AnchorPoint = Vector2.new(0, 1)
+  foot.Position = UDim2.new(0, 8, 1, -8)
+  foot.Size = UDim2.new(1, -16, 0, 44)
   foot.BackgroundColor3 = C.surface
   foot.BackgroundTransparency = 0.35
   foot.BorderSizePixel = 0
@@ -4568,15 +4649,13 @@ function Lib.CreateWindow(opts: any?): any
   av.Name = "Avatar"
   av.AnchorPoint = Vector2.new(0, 0.5)
   av.Position = UDim2.fromOffset(6, 22)
-  av.Size = UDim2.fromOffset(32, 32)
+  av.Size = UDim2.fromOffset(30, 30)
   av.BackgroundColor3 = C.pop
-  av.BackgroundTransparency = 0
   av.BorderSizePixel = 0
   Instance.new("UICorner", av).CornerRadius = UDim.new(1, 0)
   local nm = Instance.new("TextLabel", foot)
-  nm.Name = "Name"
-  nm.Position = UDim2.new(0, 44, 0, 5)
-  nm.Size = UDim2.new(1, -50, 0, 16)
+  nm.Position = UDim2.new(0, 42, 0, 5)
+  nm.Size = UDim2.new(1, -48, 0, 16)
   nm.BackgroundTransparency = 1
   nm.FontFace = UI.F.semibold
   nm.TextSize = 12
@@ -4584,9 +4663,8 @@ function Lib.CreateWindow(opts: any?): any
   nm.TextTruncate = Enum.TextTruncate.AtEnd
   nm.TextColor3 = C.text
   local sub = Instance.new("TextLabel", foot)
-  sub.Name = "Sub"
-  sub.Position = UDim2.new(0, 44, 0, 22)
-  sub.Size = UDim2.new(1, -50, 0, 14)
+  sub.Position = UDim2.new(0, 42, 0, 22)
+  sub.Size = UDim2.new(1, -48, 0, 14)
   sub.BackgroundTransparency = 1
   sub.FontFace = UI.F.medium
   sub.TextSize = 11
@@ -4604,14 +4682,12 @@ function Lib.CreateWindow(opts: any?): any
     sub.Text = execName:lower() .. " · " .. tostring(Lib.VERSION)
     pcall(function()
       if lp then
-        local thumb = game:GetService("Players"):GetUserThumbnailAsync(lp.UserId, Enum.ThumbnailType.HeadShot, Enum.ThumbnailSize.Size48x48)
-        av.Image = thumb
+        av.Image = game:GetService("Players"):GetUserThumbnailAsync(lp.UserId, Enum.ThumbnailType.HeadShot, Enum.ThumbnailSize.Size48x48)
       end
     end)
     local dot = Instance.new("Frame", foot)
-    dot.Name = "Online"
     dot.AnchorPoint = Vector2.new(1, 1)
-    dot.Position = UDim2.new(0, 34, 0, 36)
+    dot.Position = UDim2.new(0, 32, 0, 34)
     dot.Size = UDim2.fromOffset(9, 9)
     dot.BackgroundColor3 = C.ok
     dot.BorderSizePixel = 0
@@ -4620,28 +4696,129 @@ function Lib.CreateWindow(opts: any?): any
     ds.Color = C.side
     ds.Thickness = 2
   end
+  -- topbar: config + save + search + gear -------------------------------------
+  local COL_X = 12 + RAIL_W + 8
+  local top = Instance.new("Frame", root)
+  top.Name = "Topbar"
+  top.Position = UDim2.fromOffset(COL_X, 12)
+  top.Size = UDim2.new(1, -(COL_X + 12), 0, 30)
+  top.BackgroundTransparency = 1
+  local cfgBtn = Instance.new("TextButton", top)
+  cfgBtn.Name = "Config"
+  cfgBtn.Size = UDim2.new(0, 130, 1, 0)
+  cfgBtn.BackgroundColor3 = C.surface
+  cfgBtn.AutoButtonColor = false
+  cfgBtn.FontFace = UI.F.medium
+  cfgBtn.TextSize = 12
+  cfgBtn.TextColor3 = C.dim
+  cfgBtn.TextXAlignment = Enum.TextXAlignment.Left
+  cfgBtn.Text = "  No config"
+  cfgBtn.TextTruncate = Enum.TextTruncate.AtEnd
+  Instance.new("UICorner", cfgBtn).CornerRadius = UDim.new(0, 7)
+  local cfgPad = Instance.new("UIPadding", cfgBtn)
+  cfgPad.PaddingLeft = UDim.new(0, 6)
+  local saveBtn = Instance.new("TextButton", top)
+  saveBtn.Name = "Save"
+  saveBtn.Position = UDim2.fromOffset(136, 0)
+  saveBtn.Size = UDim2.new(0, 76, 1, 0)
+  saveBtn.BackgroundColor3 = C.surface
+  saveBtn.AutoButtonColor = false
+  saveBtn.FontFace = UI.F.semibold
+  saveBtn.TextSize = 12
+  saveBtn.TextColor3 = C.text
+  saveBtn.Text = "● save"
+  Instance.new("UICorner", saveBtn).CornerRadius = UDim.new(0, 7)
+  pcall(function()
+    if UI.brushed(saveBtn) then
+      saveBtn.TextColor3 = UI.metal.ink
+      UI.setFont(saveBtn, UI.F.bold)
+    end
+  end)
+  saveBtn.MouseButton1Click:Connect(function()
+    if type(opts.OnSave) == "function" then pcall(opts.OnSave, Lib.cfg) end
+    saveBtn.Text = "● saved"
+    task.delay(1, function() if saveBtn.Parent then saveBtn.Text = "● save" end end)
+  end)
+  local gearBtn = Instance.new("TextButton", top)
+  gearBtn.Name = "Gear"
+  gearBtn.AnchorPoint = Vector2.new(1, 0)
+  gearBtn.Position = UDim2.new(1, 0, 0, 0)
+  gearBtn.Size = UDim2.new(0, 30, 1, 0)
+  gearBtn.BackgroundTransparency = 1
+  gearBtn.FontFace = UI.F.semibold
+  gearBtn.TextSize = 15
+  gearBtn.TextColor3 = C.muted
+  gearBtn.Text = "⚙"
+  local searchBox: TextBox = Instance.new("TextBox", top)
+  searchBox.Name = "Search"
+  searchBox.AnchorPoint = Vector2.new(1, 0)
+  searchBox.Position = UDim2.new(1, -36, 0, 0)
+  searchBox.Size = UDim2.new(0, 170, 1, 0)
+  searchBox.BackgroundColor3 = C.surface
+  searchBox.FontFace = UI.F.medium
+  searchBox.TextSize = 12
+  searchBox.TextColor3 = C.text
+  searchBox.PlaceholderColor3 = C.muted
+  searchBox.PlaceholderText = "● search settings"
+  searchBox.Text = ""
+  searchBox.ClearTextOnFocus = false
+  Instance.new("UICorner", searchBox).CornerRadius = UDim.new(0, 7)
+  local searchPad = Instance.new("UIPadding", searchBox)
+  searchPad.PaddingLeft = UDim.new(0, 10)
+  searchBox:GetPropertyChangedSignal("Text"):Connect(function()
+    UI.search(searchBox.Text)
+  end)
+  -- content holder -------------------------------------------------------------
   local holder = Instance.new("Frame", root)
   holder.Name = "Pages"
-  holder.Position = UDim2.new(0, 160, 0, 52)
-  holder.Size = UDim2.new(1, -172, 1, -64)
+  holder.Position = UDim2.fromOffset(COL_X, 50)
+  holder.Size = UDim2.new(1, -(COL_X + 12), 1, -62)
   holder.BackgroundTransparency = 1
-  UI.M.colW = holder.AbsoluteSize.X > 0 and holder.AbsoluteSize.X or 300
-  local win: any = { gui = gui, root = root, side = side, holder = holder, tabs = {}, active = nil, title = title }
-  function win:Tab(name: string, _icon: string?): any
-    local page = Instance.new("ScrollingFrame", holder)
+  UI.M.colW = 300
+  local win: any = { gui = gui, root = root, side = sideScroll, holder = holder, tabs = {}, active = nil, title = title, _sections = {} }
+  local function paintTabButton(btn: TextButton, on: boolean)
+    -- flat active pill: brushed metal draws a 1px sheen bar on top (reads as a line)
+    if on then
+      btn.BackgroundTransparency = 0
+      btn.BackgroundColor3 = C.card
+      btn.TextColor3 = C.text
+      UI.setFont(btn, UI.F.bold)
+    else
+      btn.BackgroundTransparency = 1
+      btn.TextColor3 = C.dim
+      UI.setFont(btn, UI.F.semibold)
+    end
+  end
+  function win:Tab(name: string, topts: any?): any
+    topts = topts or {}
+    -- sections order tabs silently (no header rows: they read as separator lines)
+    local section = tostring(topts.section or "tabs")
+    if not self._sections[section] then
+      self._sections[section] = #self.tabs
+    end
+    -- sub-tab bar (segmented) + two-column sub pages
+    local subbar = Instance.new("Frame", holder)
+    subbar.Name = "Subbar_" .. tostring(name)
+    subbar.Size = UDim2.new(1, 0, 0, 30)
+    subbar.BackgroundColor3 = C.side
+    subbar.BorderSizePixel = 0
+    subbar.Visible = false
+    Instance.new("UICorner", subbar).CornerRadius = UDim.new(0, 8)
+    local subList = Instance.new("UIListLayout", subbar)
+    subList.FillDirection = Enum.FillDirection.Horizontal
+    subList.Padding = UDim.new(0, 4)
+    subList.SortOrder = Enum.SortOrder.LayoutOrder
+    subList.VerticalAlignment = Enum.VerticalAlignment.Center
+    local subPad = Instance.new("UIPadding", subbar)
+    subPad.PaddingLeft = UDim.new(0, 6)
+    subPad.PaddingRight = UDim.new(0, 6)
+    local page = Instance.new("Frame", holder)
     page.Name = "Page_" .. tostring(name)
-    page.Size = UDim2.new(1, 0, 1, 0)
+    page.Position = UDim2.new(0, 0, 0, 36)
+    page.Size = UDim2.new(1, 0, 1, -36)
     page.BackgroundTransparency = 1
-    page.BorderSizePixel = 0
-    page.ScrollBarThickness = 3
-    page.ScrollBarImageColor3 = C.faint
-    page.AutomaticCanvasSize = Enum.AutomaticSize.Y
-    page.CanvasSize = UDim2.new(0, 0, 0, 0)
     page.Visible = false
-    local layout = Instance.new("UIListLayout", page)
-    layout.Padding = UDim.new(0, 10)
-    layout.SortOrder = Enum.SortOrder.LayoutOrder
-    local btn = Instance.new("TextButton", side)
+    local btn = Instance.new("TextButton", sideScroll)
     btn.Name = "Tab_" .. tostring(name)
     btn.Size = UDim2.new(1, 0, 0, 30)
     btn.BackgroundColor3 = C.surface
@@ -4652,12 +4829,122 @@ function Lib.CreateWindow(opts: any?): any
     btn.TextColor3 = C.dim
     btn.TextXAlignment = Enum.TextXAlignment.Left
     btn.Text = "  " .. string.lower(tostring(name))
+    btn.LayoutOrder = #self.tabs * 100 + 1
     Instance.new("UICorner", btn).CornerRadius = UDim.new(0, 6)
     local padB = Instance.new("UIPadding", btn)
     padB.PaddingLeft = UDim.new(0, 8)
-    local tab: any = { name = name, page = page, button = btn }
+    Instance.new("UICorner", btn).CornerRadius = UDim.new(0, 6)
+    local tab: any = { name = name, page = page, button = btn, subbar = subbar, subs = {}, activeSub = nil, _colFlip = false }
+    function tab:Sub(sname: string): any
+      local wrap = Instance.new("ScrollingFrame", page)
+      wrap.Name = "Sub_" .. tostring(sname)
+      wrap.Size = UDim2.new(1, 0, 1, 0)
+      wrap.BackgroundTransparency = 1
+      wrap.BorderSizePixel = 0
+      wrap.ScrollBarThickness = 3
+      wrap.ScrollBarImageColor3 = C.faint
+      wrap.AutomaticCanvasSize = Enum.AutomaticSize.Y
+      wrap.CanvasSize = UDim2.new(0, 0, 0, 0)
+      wrap.Visible = false
+      local cols = Instance.new("Frame", wrap)
+      cols.Name = "Cols"
+      cols.Size = UDim2.new(1, 0, 0, 0)
+      cols.AutomaticSize = Enum.AutomaticSize.Y
+      cols.BackgroundTransparency = 1
+      local left = Instance.new("Frame", cols)
+      left.Name = "ColA"
+      left.Size = UDim2.new(1, 0, 0, 0)
+      left.AutomaticSize = Enum.AutomaticSize.Y
+      left.BackgroundTransparency = 1
+      local ll = Instance.new("UIListLayout", left)
+      ll.Padding = UDim.new(0, 10)
+      ll.SortOrder = Enum.SortOrder.LayoutOrder
+      local right = Instance.new("Frame", cols)
+      right.Name = "ColB"
+      right.AnchorPoint = Vector2.new(1, 0)
+      right.Position = UDim2.new(1, 0, 0, 0)
+      right.Size = UDim2.new(0.5, -4, 0, 0)
+      right.AutomaticSize = Enum.AutomaticSize.Y
+      right.BackgroundTransparency = 1
+      right.Visible = false
+      local rl = Instance.new("UIListLayout", right)
+      rl.Padding = UDim.new(0, 10)
+      rl.SortOrder = Enum.SortOrder.LayoutOrder
+      local seg = Instance.new("TextButton", subbar)
+      seg.Name = "Seg_" .. tostring(sname)
+      seg.AutomaticSize = Enum.AutomaticSize.X
+      seg.Size = UDim2.new(0, 0, 0, 22)
+      seg.BackgroundColor3 = C.surface
+      seg.BackgroundTransparency = 1
+      seg.AutoButtonColor = false
+      seg.FontFace = UI.F.semibold
+      seg.TextSize = 12
+      seg.TextColor3 = C.dim
+      seg.Text = "  " .. string.lower(tostring(sname)) .. "  "
+      seg.LayoutOrder = #self.subs
+      Instance.new("UICorner", seg).CornerRadius = UDim.new(0, 6)
+      local sub: any = { name = sname, wrap = wrap, left = left, right = right, seg = seg, _flip = false }
+      function sub:Group(gtitle: string, gopts: any?)
+        gopts = gopts or {}
+        -- no header hairline unless asked ({ noLine = false } brings it back)
+        if gopts.noLine == nil then
+          gopts.noLine = true
+        end
+        -- one full-width column: no gutter, no divider. { column = 2 } splits
+        -- into two columns on first use.
+        local col = left
+        if gopts.column == 2 then
+          if not right.Visible then
+            right.Visible = true
+            left.Size = UDim2.new(0.5, -4, 0, 0)
+          end
+          col = right
+        end
+        -- flat groups by default: no card border, no header line.
+        -- ({ flat = false } restores the original chrome, { noLine = false } just the line)
+        local g = UI.group(col, gtitle, gopts)
+        if gopts.flat ~= false then
+          local card = g.frame:FindFirstChild("Card")
+          if card then
+            for _, st in ipairs(card:GetChildren()) do
+              if st:IsA("UIStroke") then
+                st:Destroy()
+              end
+            end
+          end
+        end
+        return g
+      end
+      seg.MouseButton1Click:Connect(function() tab:SelectSub(sname) end)
+      table.insert(self.subs, sub)
+      if tab.activeSub == nil then tab:SelectSub(sname) end
+      self:_refreshSubbar()
+      return sub
+    end
+    function tab:_refreshSubbar()
+      if #self.subs > 1 then
+        subbar.Visible = true
+        page.Position = UDim2.new(0, 0, 0, 36)
+        page.Size = UDim2.new(1, 0, 1, -36)
+      else
+        subbar.Visible = false
+        page.Position = UDim2.new(0, 0, 0, 0)
+        page.Size = UDim2.new(1, 0, 1, 0)
+      end
+    end
+    function tab:SelectSub(sname: string)
+      self.activeSub = sname
+      for _, s in ipairs(self.subs) do
+        local on = s.name == sname
+        s.wrap.Visible = on
+        s.seg.BackgroundTransparency = on and 0 or 1
+        s.seg.TextColor3 = on and C.text or C.dim
+      end
+    end
+    -- default sub so tab:Group works without explicit subs (single column pair)
+    local _default = tab:Sub("main")
     function tab:Group(gtitle: string, gopts: any?)
-      return UI.group(page, gtitle, gopts)
+      return _default:Group(gtitle, gopts)
     end
     btn.MouseButton1Click:Connect(function() win:Select(name) end)
     table.insert(self.tabs, tab)
@@ -4669,9 +4956,49 @@ function Lib.CreateWindow(opts: any?): any
     for _, t in ipairs(self.tabs) do
       local on = t.name == name
       t.page.Visible = on
-      t.button.BackgroundTransparency = on and 0 or 1
-      t.button.TextColor3 = on and C.text or C.dim
+      t.subbar.Visible = on and (#t.subs > 1)
+      paintTabButton(t.button, on)
     end
+  end
+  -- attached side panel (hitbox-style): rides on the window's right edge
+  function win:Panel(ptitle: string, width: number?): Frame
+    local w = width or 200
+    local p = Instance.new("Frame", root)
+    p.Name = "Panel_" .. tostring(ptitle)
+    p.AnchorPoint = Vector2.new(0, 0)
+    p.Position = UDim2.new(1, 8, 0, 0)
+    p.Size = UDim2.new(0, w, 1, 0)
+    p.BackgroundColor3 = C.bg
+    p.BorderSizePixel = 0
+    Instance.new("UICorner", p).CornerRadius = UDim.new(0, 12)
+    local ps = Instance.new("UIStroke", p)
+    ps.Color = C.edge
+    pcall(function()
+      UI.acrylic(p, { light = 0.08, grain = 0.96, radius = 12, edge = 0.85, z = 0 })
+    end)
+    local pt = Instance.new("TextLabel", p)
+    pt.Size = UDim2.new(1, -20, 0, 30)
+    pt.Position = UDim2.fromOffset(12, 8)
+    pt.BackgroundTransparency = 1
+    pt.FontFace = UI.F.semibold
+    pt.TextSize = 13
+    pt.TextXAlignment = Enum.TextXAlignment.Left
+    pt.TextColor3 = C.text
+    pt.Text = string.lower(tostring(ptitle))
+    local body = Instance.new("ScrollingFrame", p)
+    body.Name = "Body"
+    body.Position = UDim2.new(0, 8, 0, 42)
+    body.Size = UDim2.new(1, -16, 1, -50)
+    body.BackgroundTransparency = 1
+    body.BorderSizePixel = 0
+    body.ScrollBarThickness = 3
+    body.ScrollBarImageColor3 = C.faint
+    body.AutomaticCanvasSize = Enum.AutomaticSize.Y
+    body.CanvasSize = UDim2.new(0, 0, 0, 0)
+    local bl = Instance.new("UIListLayout", body)
+    bl.Padding = UDim.new(0, 10)
+    bl.SortOrder = Enum.SortOrder.LayoutOrder
+    return body
   end
   function win:Toggle(visible: boolean?)
     root.Visible = if visible == nil then not root.Visible else visible == true

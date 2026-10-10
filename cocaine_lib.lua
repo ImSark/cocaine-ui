@@ -4471,7 +4471,7 @@ end
 
 -- Window / Tab manager (standalone only, not part of the verbatim kit)
 local Lib: any = {}
-Lib.VERSION = "1.0.2-outline2"
+Lib.VERSION = "1.0.3-profile"
 print("[cocaine-lib] " .. tostring(Lib.VERSION))
 Lib.UI = UI
 Lib.cfg = cfg
@@ -4548,6 +4548,73 @@ function Lib.CreateWindow(opts: any?): any
   pad.PaddingTop = UDim.new(0, 8)
   pad.PaddingLeft = UDim.new(0, 8)
   pad.PaddingRight = UDim.new(0, 8)
+  pad.PaddingBottom = UDim.new(0, 56)
+  -- profile card pinned to the sidebar foot, like the original (avatar + name + executor)
+  local foot = Instance.new("Frame", side)
+  foot.Name = "Profile"
+  foot.AnchorPoint = Vector2.new(0, 1)
+  foot.Position = UDim2.new(0, 8, 1, -8)
+  foot.Size = UDim2.new(1, -16, 0, 44)
+  foot.BackgroundColor3 = C.surface
+  foot.BackgroundTransparency = 0.35
+  foot.BorderSizePixel = 0
+  Instance.new("UICorner", foot).CornerRadius = UDim.new(0, 8)
+  local av = Instance.new("ImageLabel", foot)
+  av.Name = "Avatar"
+  av.AnchorPoint = Vector2.new(0, 0.5)
+  av.Position = UDim2.fromOffset(6, 22)
+  av.Size = UDim2.fromOffset(32, 32)
+  av.BackgroundColor3 = C.pop
+  av.BackgroundTransparency = 0
+  av.BorderSizePixel = 0
+  Instance.new("UICorner", av).CornerRadius = UDim.new(1, 0)
+  local nm = Instance.new("TextLabel", foot)
+  nm.Name = "Name"
+  nm.Position = UDim2.new(0, 44, 0, 5)
+  nm.Size = UDim2.new(1, -50, 0, 16)
+  nm.BackgroundTransparency = 1
+  nm.FontFace = UI.F.semibold
+  nm.TextSize = 12
+  nm.TextXAlignment = Enum.TextXAlignment.Left
+  nm.TextTruncate = Enum.TextTruncate.AtEnd
+  nm.TextColor3 = C.text
+  local sub = Instance.new("TextLabel", foot)
+  sub.Name = "Sub"
+  sub.Position = UDim2.new(0, 44, 0, 22)
+  sub.Size = UDim2.new(1, -50, 0, 14)
+  sub.BackgroundTransparency = 1
+  sub.FontFace = UI.F.medium
+  sub.TextSize = 11
+  sub.TextXAlignment = Enum.TextXAlignment.Left
+  sub.TextTruncate = Enum.TextTruncate.AtEnd
+  sub.TextColor3 = C.muted
+  do
+    local lp = game:GetService("Players").LocalPlayer
+    nm.Text = if lp then lp.DisplayName else "local"
+    local execName = "unknown"
+    pcall(function()
+      local id = __gg("identifyexecutor")
+      if type(id) == "function" then execName = tostring(id()) end
+    end)
+    sub.Text = execName:lower() .. " · " .. tostring(Lib.VERSION)
+    pcall(function()
+      if lp then
+        local thumb = game:GetService("Players"):GetUserThumbnailAsync(lp.UserId, Enum.ThumbnailType.HeadShot, Enum.ThumbnailSize.Size48x48)
+        av.Image = thumb
+      end
+    end)
+    local dot = Instance.new("Frame", foot)
+    dot.Name = "Online"
+    dot.AnchorPoint = Vector2.new(1, 1)
+    dot.Position = UDim2.new(0, 34, 0, 36)
+    dot.Size = UDim2.fromOffset(9, 9)
+    dot.BackgroundColor3 = C.ok
+    dot.BorderSizePixel = 0
+    Instance.new("UICorner", dot).CornerRadius = UDim.new(1, 0)
+    local ds = Instance.new("UIStroke", dot)
+    ds.Color = C.side
+    ds.Thickness = 2
+  end
   local holder = Instance.new("Frame", root)
   holder.Name = "Pages"
   holder.Position = UDim2.new(0, 160, 0, 52)

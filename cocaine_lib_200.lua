@@ -4963,6 +4963,24 @@ function Lib.CreateWindow(opts: any?): any
     bl.SortOrder = Enum.SortOrder.LayoutOrder
     return body
   end
+  function win:Toggle(visible: boolean?)
+    root.Visible = if visible == nil then not root.Visible else visible == true
+    S.menuOpen = root.Visible
+  end
+  function win:Destroy()
+    S.alive = false
+    pcall(function() gui:Destroy() end)
+  end
+  do
+    local key = opts.ToggleKey or Enum.KeyCode.RightShift
+    UIS.InputBegan:Connect(function(input, gpe)
+      if gpe then return end
+      if input.KeyCode == key then win:Toggle() end
+    end)
+  end
+  table.insert(Lib._windows, win)
+  return win
+end
 function Lib.UnloadAll()
   for _, w in ipairs(Lib._windows) do
     pcall(function() w:Destroy() end)

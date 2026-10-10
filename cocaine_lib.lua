@@ -4471,6 +4471,8 @@ end
 
 -- Window / Tab manager (standalone only, not part of the verbatim kit)
 local Lib: any = {}
+Lib.VERSION = "1.0.2-outline2"
+print("[cocaine-lib] " .. tostring(Lib.VERSION))
 Lib.UI = UI
 Lib.cfg = cfg
 Lib._windows = {}
@@ -4492,18 +4494,11 @@ function Lib.CreateWindow(opts: any?): any
     gui.Parent = cg
   end)
   if not parented or gui.Parent == nil then
-    local pg
-    pcall(function() pg = game.Players:FindFirstChild("LocalPlayer") end)
-    if pg then
-      local ok, playerGui = pcall(function() return pg:FindFirstChild("PlayerGui") end)
-      if ok and playerGui then
-        gui.Parent = playerGui
-      else
-        gui.Parent = game:GetService("CoreGui")
-      end
-    else
-      pcall(function() gui.Parent = game:GetService("CoreGui") end)
-    end
+    pcall(function()
+      local getHui = __gg("gethui")
+      if type(getHui) == "function" then gui.Parent = getHui() return end
+      gui.Parent = game.Players.LocalPlayer:WaitForChild("PlayerGui")
+    end)
   end
   local W, H = 620, 440
   if typeof(opts.Size) == "UDim2" then
@@ -4519,32 +4514,9 @@ function Lib.CreateWindow(opts: any?): any
   root.Draggable = true
   root.Parent = gui
   Instance.new("UICorner", root).CornerRadius = UDim.new(0, 12)
-  -- exact original outline: edge gradient stroke + 22px black shadow + 20px accent aura
-  local edge = Instance.new("UIStroke", root)
-  edge.Name = "Edge"
-  edge.Color = Color3.new(1, 1, 1)
-  edge.Thickness = 1
-  edge.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
-  local eg = Instance.new("UIGradient", edge)
-  eg.Rotation = 35
-  local lookFx = UI.themeFx()
-  eg.Color = if lookFx
-    then UI.fxSeq(lookFx.flag)
-    else ColorSequence.new({
-      ColorSequenceKeypoint.new(0, C.accent),
-      ColorSequenceKeypoint.new(0.35, C.edge),
-      ColorSequenceKeypoint.new(0.7, C.edge),
-      ColorSequenceKeypoint.new(1, C.accent2),
-    })
-  -- metal edge takes over the gradient rotation if no theme fx
-  if not lookFx and UI.metalEdge(edge) then
-    UI.metalEdge(edge).Rotation = 35
-  end
-  -- 22px: the original's docked panel sits 14px away; falloff nearly gone by then
-  pcall(function()
-    UI.softShadow(root, "Shadow", Color3.new(0, 0, 0), 0.45, 22, 12)
-    UI.softShadow(root, "Aura", C.accent, UI.glowAlpha(0.4), 20, 12)
-  end)
+  local stroke = Instance.new("UIStroke", root)
+  stroke.Color = C.hairline
+  stroke.Thickness = 1
   -- titlebar
   local bar = Instance.new("Frame", root)
   bar.Name = "Titlebar"

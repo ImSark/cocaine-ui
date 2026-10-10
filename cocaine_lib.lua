@@ -4510,7 +4510,7 @@ end
 
 -- Window / Tab manager (standalone only, not part of the verbatim kit)
 local Lib: any = {}
-Lib.VERSION = "2.0.11-pill"
+Lib.VERSION = "2.0.12-sections"
 print("[cocaine-lib] " .. tostring(Lib.VERSION))
 Lib.UI = UI
 Lib.cfg = cfg
@@ -4811,10 +4811,20 @@ function Lib.CreateWindow(opts: any?): any
   end
   function win:Tab(name: string, topts: any?): any
     topts = topts or {}
-    -- sections order tabs silently (no header rows: they read as separator lines)
+    -- rail section headers (combat / visuals / other), like the original
     local section = tostring(topts.section or "tabs")
-    if not self._sections[section] then
-      self._sections[section] = #self.tabs
+    if self._sections[section] == nil then
+      self._sections[section] = true
+      local lab = Instance.new("TextLabel", sideScroll)
+      lab.Name = "Section_" .. section
+      lab.Size = UDim2.new(1, 0, 0, 18)
+      lab.BackgroundTransparency = 1
+      lab.FontFace = UI.F.medium
+      lab.TextSize = 11
+      lab.TextXAlignment = Enum.TextXAlignment.Left
+      lab.TextColor3 = C.muted
+      lab.Text = "  " .. string.lower(section)
+      lab.LayoutOrder = #self.tabs * 100
     end
     -- sub-tab bar (segmented) + two-column sub pages
     local subbar = Instance.new("Frame", holder)

@@ -1,4 +1,4 @@
-local Lib = loadstring(game:HttpGet("https://raw.githubusercontent.com/ImSark/cocaine-ui/main/cocaine_lib.lua?t=" .. tostring(os.time())))()
+local Lib = loadstring(game:HttpGet("https://cdn.jsdelivr.net/gh/ImSark/cocaine-ui@main/cocaine_lib.lua"))()
 assert(Lib.VERSION == "2.0.13-icons", "CDN stale: " .. tostring(Lib.VERSION))
 
 local win = Lib.CreateWindow({ Title = "c0caine" })

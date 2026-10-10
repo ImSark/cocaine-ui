@@ -4510,7 +4510,7 @@ end
 
 -- Window / Tab manager (standalone only, not part of the verbatim kit)
 local Lib: any = {}
-Lib.VERSION = "2.0.12-sections"
+Lib.VERSION = "2.0.13-icons"
 print("[cocaine-lib] " .. tostring(Lib.VERSION))
 Lib.UI = UI
 Lib.cfg = cfg
@@ -4778,6 +4778,7 @@ function Lib.CreateWindow(opts: any?): any
   local win: any = { gui = gui, root = root, side = sideScroll, holder = holder, tabs = {}, active = nil, title = title, _sections = {} }
   local function paintTabButton(btn: TextButton, on: boolean)
     -- 209's light pill without its 1px top sheen: metal gradient + dark ink, no bar, no edge
+    local ic = btn:FindFirstChild("Icon")
     if on then
       btn.BackgroundTransparency = 0
       btn.BackgroundColor3 = Color3.new(1, 1, 1)
@@ -4796,9 +4797,11 @@ function Lib.CreateWindow(opts: any?): any
           ColorSequenceKeypoint.new(1, m.lite:Lerp(m.mid, 0.4)),
         })
         btn.TextColor3 = m.ink
+        if ic then UI.recolourIcon(ic, m.ink) end
       else
         btn.BackgroundColor3 = C.card
         btn.TextColor3 = C.text
+        if ic then UI.recolourIcon(ic, C.text) end
       end
       UI.setFont(btn, UI.F.bold)
     else
@@ -4806,6 +4809,7 @@ function Lib.CreateWindow(opts: any?): any
       local g = btn:FindFirstChild("ActiveGrad")
       if g then g:Destroy() end
       btn.TextColor3 = C.dim
+      if ic then UI.recolourIcon(ic, C.muted) end
       UI.setFont(btn, UI.F.semibold)
     end
   end
@@ -4862,7 +4866,11 @@ function Lib.CreateWindow(opts: any?): any
     btn.LayoutOrder = #self.tabs * 100 + 1
     Instance.new("UICorner", btn).CornerRadius = UDim.new(0, 6)
     local padB = Instance.new("UIPadding", btn)
-    padB.PaddingLeft = UDim.new(0, 8)
+    padB.PaddingLeft = UDim.new(0, 28)
+    -- rail glyph from the kit's icon set (frame-drawn fallback, no assets needed)
+    local tic = UI.icon(btn, UI.groupIcon(tostring(name)), 15)
+    tic.AnchorPoint = Vector2.new(0, 0.5)
+    tic.Position = UDim2.new(0, 8, 0.5, 0)
     Instance.new("UICorner", btn).CornerRadius = UDim.new(0, 6)
     local tab: any = { name = name, page = page, button = btn, subbar = subbar, subs = {}, activeSub = nil, _colFlip = false }
     function tab:Sub(sname: string): any

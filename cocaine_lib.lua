@@ -4471,7 +4471,7 @@ end
 
 -- Window / Tab manager (standalone only, not part of the verbatim kit)
 local Lib: any = {}
-Lib.VERSION = "1.0.3-profile"
+Lib.VERSION = "1.0.4-profilefix"
 print("[cocaine-lib] " .. tostring(Lib.VERSION))
 Lib.UI = UI
 Lib.cfg = cfg
@@ -4549,12 +4549,12 @@ function Lib.CreateWindow(opts: any?): any
   pad.PaddingLeft = UDim.new(0, 8)
   pad.PaddingRight = UDim.new(0, 8)
   pad.PaddingBottom = UDim.new(0, 56)
-  -- profile card pinned to the sidebar foot, like the original (avatar + name + executor)
-  local foot = Instance.new("Frame", side)
+  -- profile card pinned to the sidebar foot, like the original (avatar + name + executor).
+  -- NOTE: parented to root, not side — side's UIListLayout would override its anchors.
+  local foot = Instance.new("Frame", root)
   foot.Name = "Profile"
-  foot.AnchorPoint = Vector2.new(0, 1)
-  foot.Position = UDim2.new(0, 8, 1, -8)
-  foot.Size = UDim2.new(1, -16, 0, 44)
+  foot.Position = UDim2.new(0, 20, 1, -52)
+  foot.Size = UDim2.new(0, 124, 0, 44)
   foot.BackgroundColor3 = C.surface
   foot.BackgroundTransparency = 0.35
   foot.BorderSizePixel = 0

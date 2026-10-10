@@ -4510,7 +4510,7 @@ end
 
 -- Window / Tab manager (standalone only, not part of the verbatim kit)
 local Lib: any = {}
-Lib.VERSION = "2.0.13-icons"
+Lib.VERSION = "2.0.14-keys"
 print("[cocaine-lib] " .. tostring(Lib.VERSION))
 Lib.UI = UI
 Lib.cfg = cfg
@@ -4775,6 +4775,23 @@ function Lib.CreateWindow(opts: any?): any
   holder.Size = UDim2.new(1, -(COL_X + 12), 1, -62)
   holder.BackgroundTransparency = 1
   UI.M.colW = 300
+  -- rail glyphs use the kit's TAB-name icons (the frame fallback only draws those;
+  -- ligature names fall through to a dot). Every result is also a UI.ICONS key,
+  -- so the font path renders the same glyph once fonts download.
+  local function railIcon(title: string): string
+    local t = string.lower(title)
+    if t:find("silent", 1, true) then return "Silent" end
+    if t:find("rage", 1, true) then return "Rage" end
+    if t:find("trigger", 1, true) then return "Aimbot" end
+    if t:find("aim", 1, true) then return "Aimbot" end
+    if t:find("player", 1, true) or t:find("esp", 1, true) or t:find("visual", 1, true) then return "Visuals" end
+    if t:find("world", 1, true) or t:find("map", 1, true) then return "World" end
+    if t:find("skin", 1, true) then return "Skins" end
+    if t:find("config", 1, true) then return "Settings" end
+    if t:find("interface", 1, true) or t:find("setting", 1, true) then return "Interface" end
+    if t:find("debug", 1, true) then return "Debug" end
+    return "menu"
+  end
   local win: any = { gui = gui, root = root, side = sideScroll, holder = holder, tabs = {}, active = nil, title = title, _sections = {} }
   local function paintTabButton(btn: TextButton, on: boolean)
     -- 209's light pill without its 1px top sheen: metal gradient + dark ink, no bar, no edge
@@ -4868,7 +4885,7 @@ function Lib.CreateWindow(opts: any?): any
     local padB = Instance.new("UIPadding", btn)
     padB.PaddingLeft = UDim.new(0, 28)
     -- rail glyph from the kit's icon set (frame-drawn fallback, no assets needed)
-    local tic = UI.icon(btn, UI.groupIcon(tostring(name)), 15)
+    local tic = UI.icon(btn, railIcon(tostring(name)), 15)
     tic.AnchorPoint = Vector2.new(0, 0.5)
     tic.Position = UDim2.new(0, 8, 0.5, 0)
     Instance.new("UICorner", btn).CornerRadius = UDim.new(0, 6)
@@ -5047,7 +5064,13 @@ function Lib.CreateWindow(opts: any?): any
     pcall(function() gui:Destroy() end)
   end
   do
-    local key = opts.ToggleKey or Enum.KeyCode.RightShift
+    local key: any = opts.ToggleKey or Enum.KeyCode.RightShift
+    if typeof(key) == "string" then
+      local kc = Enum.KeyCode[key]
+      if kc then
+        key = kc
+      end
+    end
     UIS.InputBegan:Connect(function(input, gpe)
       if gpe then return end
       if input.KeyCode == key then win:Toggle() end

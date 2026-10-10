@@ -4510,7 +4510,7 @@ end
 
 -- Window / Tab manager (standalone only, not part of the verbatim kit)
 local Lib: any = {}
-Lib.VERSION = "2.0.10-flattabs"
+Lib.VERSION = "2.0.11-pill"
 print("[cocaine-lib] " .. tostring(Lib.VERSION))
 Lib.UI = UI
 Lib.cfg = cfg
@@ -4777,14 +4777,34 @@ function Lib.CreateWindow(opts: any?): any
   UI.M.colW = 300
   local win: any = { gui = gui, root = root, side = sideScroll, holder = holder, tabs = {}, active = nil, title = title, _sections = {} }
   local function paintTabButton(btn: TextButton, on: boolean)
-    -- flat active pill: brushed metal draws a 1px sheen bar on top (reads as a line)
+    -- 209's light pill without its 1px top sheen: metal gradient + dark ink, no bar, no edge
     if on then
       btn.BackgroundTransparency = 0
-      btn.BackgroundColor3 = C.card
-      btn.TextColor3 = C.text
+      btn.BackgroundColor3 = Color3.new(1, 1, 1)
+      local m = UI.metal
+      if m then
+        local g = btn:FindFirstChild("ActiveGrad")
+        if not g then
+          g = Instance.new("UIGradient")
+          g.Name = "ActiveGrad"
+          g.Rotation = 90
+          g.Parent = btn
+        end
+        g.Color = ColorSequence.new({
+          ColorSequenceKeypoint.new(0, m.hi),
+          ColorSequenceKeypoint.new(0.58, m.lite),
+          ColorSequenceKeypoint.new(1, m.lite:Lerp(m.mid, 0.4)),
+        })
+        btn.TextColor3 = m.ink
+      else
+        btn.BackgroundColor3 = C.card
+        btn.TextColor3 = C.text
+      end
       UI.setFont(btn, UI.F.bold)
     else
       btn.BackgroundTransparency = 1
+      local g = btn:FindFirstChild("ActiveGrad")
+      if g then g:Destroy() end
       btn.TextColor3 = C.dim
       UI.setFont(btn, UI.F.semibold)
     end
